@@ -3,8 +3,30 @@ import gitlab
 import base64
 from dotenv import load_dotenv
 from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain_core.documents import Document
+from langchain_community.vectorstores import Chroma
+from langchain_ollama import OllamaEmbeddings
 
 load_dotenv()
+
+def load_docs_to_chroma(docs, persist_directory="chroma_db"):
+    # Drop the existing database by deleting the directory if it exists
+    import shutil
+    import os
+    if os.path.exists(persist_directory):
+        shutil.rmtree(persist_directory)
+        print(f"Dropped existing Chroma DB at {persist_directory}")
+
+    # Create embeddings and vectorstore
+    embeddings = OllamaEmbeddings(model="nomic-embed-text")  # or your preferred Ollama model
+    vectordb = Chroma.from_documents(
+        documents=docs,
+        embedding=embeddings,
+        persist_directory=persist_directory
+    )
+    vectordb.persist()
+    print(f"Loaded {len(docs)} documents into new Chroma DB at {persist_directory}")
+    return vectordb
 
 def list_group_repos(group_id):
     """List repositories in a GitLab group by group_id or group_path."""
@@ -17,7 +39,7 @@ def list_group_repos(group_id):
     projects = group.projects.list(all=True)
     text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
     
-    chunks = []
+    docs = []
     for project in projects:
         proj = gl.projects.get(project.id)
         default_branch = proj.default_branch or 'develop'
@@ -36,12 +58,24 @@ def list_group_repos(group_id):
                 try:
                     file_obj = proj.files.get(file_path=file['path'], ref=default_branch)
                     content = base64.b64decode(file_obj.content).decode('utf-8')
-                    chunks.extend(text_splitter.split_text(content))
-                    # print(f"File: {file['path']} in Project: {project.name}")
-                    # print("Content:\n", content)
+                    split_chunks = text_splitter.split_text(content)
+                    for chunk in split_chunks:
+                        doc = Document(
+                            page_content=chunk,
+                            metadata={
+                                "doc_type": "markdown",
+                                "project_name": project.name,
+                                "file_path": file['path']
+                            }
+                        )
+                        docs.append(doc)
                 except gitlab.exceptions.GitlabGetError as e:
                     print(f"Could not fetch {file['path']} in {project.name}: {e}")
         
-    print(f"chunks: {chunks[7]}")
+    if docs:
+        print(f"Found {len(docs)} markdown documents to load into Chroma.")
+        load_docs_to_chroma(docs)
+    else:
+        print("No markdown documents found to load into Chroma.")    
 
     return [project.name for project in projects]
