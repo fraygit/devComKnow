@@ -54,6 +54,7 @@ kubernetes==33.1.0
 langchain==0.3.27
 langchain-community==0.3.27
 langchain-core==0.3.72
+langchain-ollama==0.3.6
 langchain-text-splitters==0.3.9
 langsmith==0.4.8
 markdown-it-py==3.0.0
@@ -66,6 +67,7 @@ multidict==6.6.3
 mypy_extensions==1.1.0
 numpy==2.3.2
 oauthlib==3.3.1
+ollama==0.5.1
 onnxruntime==1.22.1
 opentelemetry-api==1.35.0
 opentelemetry-exporter-otlp-proto-common==1.35.0
