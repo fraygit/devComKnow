@@ -15,9 +15,9 @@ RUN python3 -m venv /venv \
     && /venv/bin/pip install -r /tmp/requirements.txt
 ENV PATH="/venv/bin:$PATH"
 
-# RUN ollama serve
+#RUN ollama serve
 # # # Pull llama3:8b model
-# RUN ollama pull llama3:8b
+#RUN ollama pull llama3:8b
 
 # Set workdir
 WORKDIR /workspace
