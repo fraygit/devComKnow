@@ -4,16 +4,13 @@ import base64
 from dotenv import load_dotenv
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_core.documents import Document
-from langchain_chroma import Chroma
 from langchain_ollama import OllamaEmbeddings
+from langchain_chroma import Chroma
+import time
 
 load_dotenv()
 
 def load_docs_to_chroma(docs, persist_directory="chroma_db"):
-    import os
-    import time
-    from langchain_community.vectorstores import Chroma
-    from langchain_ollama import OllamaEmbeddings
 
     print(f"Preparing to load {len(docs)} documents into Chroma DB at {persist_directory}")
     start_time = time.time()
@@ -24,6 +21,13 @@ def load_docs_to_chroma(docs, persist_directory="chroma_db"):
             vectordb = Chroma(persist_directory=persist_directory, embedding_function=embeddings)
             print("Adding new documents to existing Chroma DB...")
             vectordb.add_documents(docs)
+            # Diagnostics: print total docs after adding
+            try:
+                all_docs = vectordb.get()
+                print(f"Total documents in Chroma DB after add: {len(all_docs)}")
+            except Exception as diag_e:
+                print(f"[Diagnostics] Could not fetch all docs after add: {diag_e}")
+
         else:
             print("Chroma DB directory does not exist. Creating new DB.")
             vectordb = Chroma.from_documents(
@@ -31,7 +35,7 @@ def load_docs_to_chroma(docs, persist_directory="chroma_db"):
                 embedding=embeddings,
                 persist_directory=persist_directory
             )
-        vectordb.persist()
+        #vectordb.persist()
         elapsed = time.time() - start_time
         print(f"Loaded/updated {len(docs)} documents in Chroma DB at {persist_directory} in {elapsed:.2f} seconds.")
         return vectordb
