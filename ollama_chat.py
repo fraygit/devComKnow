@@ -1,9 +1,58 @@
 import ollama
 from langchain_chroma import Chroma
-from langchain_ollama import OllamaEmbeddings
+from langchain_ollama import OllamaEmbeddings, ChatOllama
+from langchain.memory import ConversationBufferMemory
+import os
+from langchain.chains import create_retrieval_chain, create_history_aware_retriever
+from langchain.prompts import ChatPromptTemplate, MessagesPlaceholder
+from langchain.chains.combine_documents import create_stuff_documents_chain
+
+
 
 from chroma_utils import search_chroma_db
 
+def chat_using_langchain(prompt: str, history: list) -> str:    
+    model = os.getenv("MODEL_NAME", "llama3:8b")
+    llm = ChatOllama(model=model, temperature=0.7)
+    memory = ConversationBufferMemory(memory_key="chat_history", return_messages=True)
+    embeddings = OllamaEmbeddings(model=model)
+    db_name = os.getenv("CONTEXT_DB_1_ID", "chroma_db_repo")
+    vectordb = Chroma(persist_directory=db_name, embedding_function=embeddings)
+    retriever = vectordb.as_retriever(search_kwargs={"k": 10})
+
+    contextualize_q_prompt = ChatPromptTemplate.from_messages([
+        ("system", "Given a chat history and the latest user question "
+            "which might reference context in the chat history, "
+            "rephrase the question to be a standalone question."),
+        MessagesPlaceholder("chat_history"),
+        ("human", "{input}")
+    ])
+
+    history_aware_retriever = create_history_aware_retriever(
+        llm, 
+        retriever, 
+        contextualize_q_prompt
+    )
+    qa_prompt = ChatPromptTemplate.from_messages([
+        ("system", "Answer the user's questions based on the below context. "
+            "if the answer is not in the context, just say you don't know."
+            "At the end of the answer, include the meta data where the answer was found.\n\n"
+            "Context: {context}"),
+        MessagesPlaceholder("chat_history"),
+        ("human", "{input}")])
+    
+    question_answer_chain = create_stuff_documents_chain(llm, qa_prompt)
+
+    rag_chain = create_retrieval_chain(
+        history_aware_retriever,
+        question_answer_chain)
+    
+    response = rag_chain.invoke({
+        "input": prompt,
+        "chat_history": memory.chat_memory.messages
+    })    
+
+    return response["answer"]
 
 def chat_with_ollama(prompt: str, model: str = "llama3:8b", persist_directory: str = "chroma_db") -> str:
     """

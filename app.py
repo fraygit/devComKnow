@@ -1,11 +1,6 @@
 import gradio as gr
 from gitlab_utils import list_group_repos, load_docs_to_chroma
-from langchain.text_splitter import MarkdownHeaderTextSplitter, RecursiveCharacterTextSplitter
-import markdown2
-from bs4 import BeautifulSoup
-from langchain_core.documents import Document
-import os
-from ollama_chat import chat_with_ollama
+from ollama_chat import chat_using_langchain
 from chroma_utils import load_files_to_chroma, fetch_all_chroma_docs
 
 
@@ -36,9 +31,9 @@ with gr.Blocks(css="#repo-output { min-height: 200px; }") as demo:
 
     btn.click(fn=show_group_repos, outputs=output)
     btn_repo.click(fn=lambda: load_files_to_chroma("repositories", db_context_number=1), outputs=output)
-    btn_pdf_chroma.click(fn=lambda: load_files_to_chroma("pdf", db_context_number=2), outputs=output)
+    btn_pdf_chroma.click(fn=lambda: load_files_to_chroma("pdf", db_context_number=1), outputs=output)
     btn_show_chroma_repos.click(fn=lambda: fetch_all_chroma_docs(1), outputs=output)   
-    btn_show_chroma_docs.click(fn=lambda: fetch_all_chroma_docs(2), outputs=output)
+    btn_show_chroma_docs.click(fn=lambda: fetch_all_chroma_docs(1), outputs=output)
 
     # --- Chat UI ---
     gr.Markdown("## AI Chat (llama3:8b)")
@@ -47,7 +42,7 @@ with gr.Blocks(css="#repo-output { min-height: 200px; }") as demo:
     send_btn = gr.Button("Send")
 
     def chat_fn(message, history):
-        response = chat_with_ollama(message)
+        response = chat_using_langchain(message, history)
         history = history or []
         history.append((message, response))
         return history, ""
