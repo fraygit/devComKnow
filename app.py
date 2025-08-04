@@ -1,6 +1,6 @@
 import gradio as gr
 from gitlab_utils import list_group_repos, load_docs_to_chroma
-from ollama_chat import chat_using_langchain
+from ollama_chat import chat_using_langchain, chat_with_ollama, chat_with_ollama_2
 from chroma_utils import load_files_to_chroma, fetch_all_chroma_docs
 
 
@@ -30,9 +30,9 @@ with gr.Blocks(css="#repo-output { min-height: 200px; }") as demo:
         output.update(value=result)
 
     btn.click(fn=show_group_repos, outputs=output)
-    btn_repo.click(fn=lambda: load_files_to_chroma("repositories", db_context_number=1), outputs=output)
+    btn_repo.click(fn=lambda: load_files_to_chroma("technical", db_context_number=2), outputs=output)
     btn_pdf_chroma.click(fn=lambda: load_files_to_chroma("pdf", db_context_number=1), outputs=output)
-    btn_show_chroma_repos.click(fn=lambda: fetch_all_chroma_docs(1), outputs=output)   
+    btn_show_chroma_repos.click(fn=lambda: fetch_all_chroma_docs(2), outputs=output)   
     btn_show_chroma_docs.click(fn=lambda: fetch_all_chroma_docs(1), outputs=output)
 
     # --- Chat UI ---
@@ -42,7 +42,8 @@ with gr.Blocks(css="#repo-output { min-height: 200px; }") as demo:
     send_btn = gr.Button("Send")
 
     def chat_fn(message, history):
-        response = chat_using_langchain(message, history)
+        #response = chat_using_langchain(message, history)
+        response = chat_with_ollama_2(message)
         history = history or []
         history.append((message, response))
         return history, ""

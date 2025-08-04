@@ -15,7 +15,9 @@ def load_docs_to_chroma(docs, persist_directory="chroma_db"):
     print(f"Preparing to load {len(docs)} documents into Chroma DB at {persist_directory}")
     start_time = time.time()
     try:
-        embeddings = OllamaEmbeddings(model="llama3:8b")
+        model = os.getenv("MODEL_NAME")
+        embedding_name = os.getenv("EMBEDDING_NAME")
+        embeddings = OllamaEmbeddings(model=embedding_name)
         if os.path.exists(persist_directory):
             print("Chroma DB directory exists. Updating existing DB.")
             vectordb = Chroma(persist_directory=persist_directory, embedding_function=embeddings)
