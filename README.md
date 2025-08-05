@@ -1,21 +1,74 @@
-# Developer Knowledgebase AI Chat
+# Developer Knowledgebase Chatbot
 
-This project is a developer knowledgebase AI chat application. It is designed to assist developers by reading all markdown (`.md`) files from the repositories of a specified group in GitLab and using their content as context for answering questions.
+This project is a knowledge base chatbot designed to help users understand internal specifications, technical documentation, and other markdown documents. It leverages large language models (LLMs) via Ollama and provides a user-friendly chat interface built with Gradio.
 
 ## Features
-- Connects to a GitLab group and accesses all repositories within that group.
-- Reads and indexes all markdown documentation files from those repositories.
-- Provides an AI-powered chat interface for developers to ask questions.
-- Answers are generated using the context from the collected markdown files, making it easy to find and reference documentation across multiple projects.
-
-## Usage
-1. Configure the application with your GitLab group information and access credentials.
-2. Start the application.
-3. Use the chat interface to ask questions about your codebase and documentation.
+- Chatbot interface for querying internal specs, technical docs, and markdown files
+- Uses Ollama for local LLM inference
+- Supports searching and referencing markdown documents
+- Easy-to-use Gradio web interface
 
 ## Requirements
 - Python 3.12+
-- See `requirements.txt` for dependencies.
+- Ollama (for running LLMs locally)
+- Gradio
+- Required Python libraries (see below)
 
-## Purpose
-This tool is intended to help development teams quickly find and utilize knowledge stored in markdown documentation across all their GitLab repositories, improving onboarding, productivity, and collaboration.
+## Installation
+1. **Clone the repository**
+   ```bash
+   git clone <this-repo-url>
+   cd devComKnow
+   ```
+2. **Install Python dependencies**
+   ```bash
+   pip install -r requirements.txt
+   ```
+3. **Install Ollama**
+   - Download and install Ollama from [https://ollama.com/download](https://ollama.com/download)
+   - Follow the instructions for your OS (Windows, macOS, Linux)
+
+4. **Download Ollama models**
+   - Start Ollama and download your preferred model (e.g., llama3, phi3, etc.):
+     ```bash
+     ollama pull llama3
+     ```
+   - You can list available models with:
+     ```bash
+     ollama list
+     ```
+
+## Document Folder Structure
+
+1. **Create a folder named `documents` at the project root.**
+2. **Inside `documents`, create a subfolder named `technical`.**
+
+The application uses two distinct embedding models to optimize document processing:
+
+### Technical Documents (`/documents/technical/*`)
+- Uses the embedding model specified by `TECHNICAL_EMBEDDING_NAME` in your `.env`
+- Optimized for technical content like API documentation, code specifications, and technical manuals
+- Provides more accurate semantic search for specialized technical terminology
+
+### Normal Documents (Other `/documents/*` folders)
+- Uses the embedding model specified by `NORMAL_EMBEDDING_NAME` in your `.env`
+- Better suited for general documentation, meeting notes, and non-technical content
+- Provides efficient search for regular documentation needs
+
+This dual-embedding approach ensures optimal search performance and accuracy for both technical and non-technical content. The system automatically applies the appropriate embedding model based on the document's location in the folder structure.
+
+## Running the Application
+Start the Gradio app with:
+```bash
+python app.py
+```
+This will launch a local web server with the chatbot interface.
+
+## Notes
+- Ensure Ollama is running before you start the Gradio app.
+- You can change the model by updating the `OLLAMA_MODEL` variable in your `.env` file.
+- For additional configuration or troubleshooting, refer to the documentation or contact the project maintainers.
+
+---
+
+This tool is intended to help teams and individuals quickly access and understand internal documentation, technical specs, and markdown-based knowledge bases using the latest advances in LLMs.
