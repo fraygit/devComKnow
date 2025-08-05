@@ -121,22 +121,34 @@ def chat_with_ollama(prompt: str, model: str = "llama3:8b", persist_directory: s
     return response3["message"]["content"]
 
 
-def chat_with_ollama_2(prompt: str, model: str = "llama3:8b", persist_directory: str = "chroma_db") -> str:
+def chat_with_ollama_2(prompt: str, model: str = "llama3:8b", persist_directory: str = "chroma_db", callback=None) -> str:
     """
     Search Chroma DB for relevant context and implement a chain of thoughts pattern
     to provide better answers using Ollama.
     """
+
+    full_response = ""
+
+    def stream_output(message):
+        if callback:
+            callback(message)
+        else:
+            print(message, flush=True)
+
     model = os.getenv("MODEL_NAME")
     
     # Retrieve relevant documents
-    print(f"Searching Chroma DB for prompt: {prompt}")
+    full_response += "🔍 Searching Chroma DB for relevant documents...\n"
+    yield(f"{full_response}")
     results = search_multi_collection(prompt)
 
     if not results:
-        print("No relevant documents found.")
+        full_response += "❌ No relevant documents found.\n"
+        yield(f"{full_response}")
         context = "No relevant context found."
     else:
-        print(f"Found {len(results)} relevant documents.")
+        full_response += f"✅ Found {len(results)} relevant documents.\n"
+        yield(f"{full_response}")
         # context = "\n---\n".join([f"Document {i+1}:\nMetadata: {doc.metadata}\nContent: {doc.page_content}" 
         #                        for i, doc in enumerate(results)])
         context = "\n---\n".join([f" {doc.page_content}" for doc in results])
@@ -156,25 +168,35 @@ def chat_with_ollama_2(prompt: str, model: str = "llama3:8b", persist_directory:
         Context:
         {context}
         """
-        
-        print(f"Analysing context...")
+
+        full_response += "🧠 Analyzing context...\n"
+        yield(f"{full_response}")
         analysis = ollama.chat(
             model=model,
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": analysis_prompt}
-            ]
+            ],
+            stream=True
         )
-        print(f"Analysis: {analysis['message']['content']}")
-        
+        full_response += "Analysis:\n"
+        yield(f"{full_response}")
+        analysis_response = ""
+        for chunk in analysis:
+            if 'message' in chunk and 'content' in chunk['message']:
+                analysis_response += chunk['message']['content']
+                full_response += f"{chunk['message']['content']}"
+                yield(f"{full_response}")
+
         # Step 2: Understand and refine the question
-        print(f"Refining question...")
+        full_response += "🔍 Refining question...\n"
+        yield(f"{full_response}")
         question_analysis = ollama.chat(
             model=model,
             messages=[
                 {"role": "system", "content": system_prompt},
-                {"role": "user", "content": analysis["message"]["content"]},
-                {"role": "assistant", "content": analysis["message"]["content"]},
+                {"role": "user", "content": analysis_response},
+                {"role": "assistant", "content": analysis_response},
                 {"role": "user", "content": f"""
                 Based on the context analysis, let's analyze the user's question to better understand what they're asking.
                 
@@ -186,20 +208,30 @@ def chat_with_ollama_2(prompt: str, model: str = "llama3:8b", persist_directory:
                 3. Break down the question into sub-questions if needed
                 4. Determine what information from the context is most relevant
                 """}
-            ]
+            ],
+            stream=True
         )
-        print(f"Question analysis: {question_analysis['message']['content']}")
-        
+
+        full_response += "Question Analysis:\n"
+        yield(f"{full_response}")
+        question_analysis_response = ""
+        for chunk in question_analysis:
+            if 'message' in chunk and 'content' in chunk['message']:
+                question_analysis_response += chunk['message']['content']
+                full_response += f"{chunk['message']['content']}"
+                yield(f"{full_response}")
+
         # Step 3: Generate the final answer using chain of thought
-        print(f"Generating final answer...")
+        full_response += "🤖 Generating final answer...\n"
+        yield(f"{full_response}")
         final_response = ollama.chat(
             model=model,
             messages=[
                 {"role": "system", "content": system_prompt},
-                {"role": "user", "content": analysis["message"]["content"]},
-                {"role": "assistant", "content": analysis["message"]["content"]},
-                {"role": "user", "content": question_analysis["message"]["content"]},
-                {"role": "assistant", "content": question_analysis["message"]["content"]},
+                {"role": "user", "content": analysis_response},
+                {"role": "assistant", "content": analysis_response},
+                {"role": "user", "content": question_analysis_response},
+                {"role": "assistant", "content": question_analysis_response},
                 {"role": "user", "content": f"""
                 Based on the context analysis and question breakdown, please provide a detailed answer to:
                 {prompt}
@@ -215,11 +247,20 @@ def chat_with_ollama_2(prompt: str, model: str = "llama3:8b", persist_directory:
                 Here is the detailed context again for reference:
                 {context}
                 """}
-            ]
+            ],
+            stream=True
         )
-        
-        return final_response["message"]["content"]
-        
+        full_response += "<h3>Final Answer:</h3>\n"
+        yield(f"{full_response}")
+        # Collect the final response
+        final_response_text = ""
+        for chunk in final_response:
+            if 'message' in chunk and 'content' in chunk['message']:
+                final_response_text += chunk['message']['content']
+                full_response += f"{chunk['message']['content']}"
+                yield(f"{full_response}")
+
+        # return final_response_text
+
     except Exception as e:
-        print(f"Error in chat_with_ollama: {e}")
-        return "I encountered an error while processing your request. Please try again later."
+        yield f"Error in chat_with_ollama: {e}"

@@ -35,20 +35,65 @@ with gr.Blocks(css="#repo-output { min-height: 200px; }") as demo:
     btn_show_chroma_repos.click(fn=lambda: fetch_all_chroma_docs(2), outputs=output)   
     btn_show_chroma_docs.click(fn=lambda: fetch_all_chroma_docs(1), outputs=output)
 
-    # --- Chat UI ---
+ # --- Chat UI ---
     gr.Markdown("## AI Chat (llama3:8b)")
     chatbot = gr.Chatbot()
     chat_input = gr.Textbox(placeholder="Ask a question about your repositories...", label="Your Question")
     send_btn = gr.Button("Send")
 
-    def chat_fn(message, history):
-        #response = chat_using_langchain(message, history)
-        response = chat_with_ollama_2(message)
-        history = history or []
-        history.append((message, response))
-        return history, ""
 
-    send_btn.click(chat_fn, inputs=[chat_input, chatbot], outputs=[chatbot, chat_input])
+    def chat_fn(message, history):
+        history = history or []
+        
+        # Add user message to history
+        history.append((message, ""))  # Start with empty response
+        
+        # Create a function to update the chat with streaming output
+        def update_chat(new_text):
+            nonlocal history
+            if history and len(history[-1]) > 1:
+                # Update the last message in history with new text
+                history[-1] = (history[-1][0], new_text)
+            return history
+        
+        # Call chat_with_ollama_2 with streaming
+        try:
+            # Initialize an empty response
+            full_response = ""
+            
+            # Get the generator from chat_with_ollama_2
+            response_generator = chat_with_ollama_2(
+                message, 
+                callback=lambda x: update_chat(f"{full_response}\n**System**: {x}")
+            )
+            
+            # Stream the response
+            for chunk in response_generator:
+                if chunk:  # Only process non-empty chunks
+                    full_response = chunk
+                    update_chat(full_response)
+                    yield history, ""
+            
+        except Exception as e:
+            error_msg = f"An error occurred: {str(e)}"
+            history[-1] = (message, error_msg)
+            yield history, ""
+
+    # Update the click event to use the new chat_fn
+    send_btn.click(
+        fn=chat_fn,
+        inputs=[chat_input, chatbot],
+        outputs=[chatbot, chat_input],
+        show_progress=False
+    )
+    
+    # Also trigger on Enter key in the chat input
+    chat_input.submit(
+        fn=chat_fn,
+        inputs=[chat_input, chatbot],
+        outputs=[chatbot, chat_input],
+        show_progress=False
+    )
 
 
 demo.launch()
