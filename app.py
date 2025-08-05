@@ -2,6 +2,7 @@ import gradio as gr
 from gitlab_utils import list_group_repos, load_docs_to_chroma
 from ollama_chat import chat_using_langchain, chat_with_ollama, chat_with_ollama_2
 from chroma_utils import load_files_to_chroma, fetch_all_chroma_docs
+import os
 
 
 def show_group_repos():
@@ -15,14 +16,10 @@ def show_group_repos():
 
 
 
-with gr.Blocks(css="#repo-output { min-height: 200px; }") as demo:
+with gr.Blocks(css="#repo-output { min-height: 50px; }") as demo:
     gr.Markdown("# GitLab Group Repositories: Ruralco")
     output = gr.HTML(elem_id="repo-output")
-    btn = gr.Button("Load Repositories")
-    btn_repo = gr.Button("Load Gitlab markdown files to Chroma")
-    btn_show_chroma_repos = gr.Button("Show ChromaDB Repo Documents")
-    btn_pdf_chroma = gr.Button("Load PDFs to Chroma")
-    btn_show_chroma_docs = gr.Button("Show ChromaDB PDF Documents")
+    btn = gr.Button("Load Documents")
 
     def on_click():
         output.update(value='<div style="text-align:center;"><span style="font-size:2em;">⏳</span><br>Loading...</div>')
@@ -30,13 +27,8 @@ with gr.Blocks(css="#repo-output { min-height: 200px; }") as demo:
         output.update(value=result)
 
     btn.click(fn=show_group_repos, outputs=output)
-    btn_repo.click(fn=lambda: load_files_to_chroma("technical", db_context_number=2), outputs=output)
-    btn_pdf_chroma.click(fn=lambda: load_files_to_chroma("pdf", db_context_number=1), outputs=output)
-    btn_show_chroma_repos.click(fn=lambda: fetch_all_chroma_docs(2), outputs=output)   
-    btn_show_chroma_docs.click(fn=lambda: fetch_all_chroma_docs(1), outputs=output)
-
  # --- Chat UI ---
-    gr.Markdown("## AI Chat (llama3:8b)")
+    gr.Markdown(f"## Chat ({os.getenv('MODEL_NAME')})")
     chatbot = gr.Chatbot()
     chat_input = gr.Textbox(placeholder="Ask a question about your repositories...", label="Your Question")
     send_btn = gr.Button("Send")
