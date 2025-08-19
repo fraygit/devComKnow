@@ -1,32 +1,29 @@
 import gradio as gr
 from gitlab_utils import list_group_repos, load_docs_to_chroma
 from ollama_chat import chat_using_langchain, chat_with_ollama, chat_with_ollama_2
-from chroma_utils import load_files_to_chroma, fetch_all_chroma_docs
+from chroma_utils import load_files_to_chroma, fetch_all_chroma_docs, load_files
 import os
 
-
-def show_group_repos():
+    
+def load_docs_to_chroma():
     try:
-        repos = list_group_repos("ruralco")
-        if not repos:
-            return "No repositories found."
-        return "<br>".join(repos)
+        load_files("documents")
+        return "Documents loaded successfully."
     except Exception as e:
-        return f"Error: {e}"
-
+        return f"Error loading documents: {e}"
 
 
 with gr.Blocks(css="#repo-output { min-height: 50px; }") as demo:
-    gr.Markdown("# GitLab Group Repositories: Ruralco")
+    gr.Markdown("# Assistance bot")
     output = gr.HTML(elem_id="repo-output")
     btn = gr.Button("Load Documents")
 
     def on_click():
-        output.update(value='<div style="text-align:center;"><span style="font-size:2em;">⏳</span><br>Loading...</div>')
-        result = show_group_repos()
-        output.update(value=result)
+        yield '<div style="text-align:center;"><span style="font-size:2em;">⏳</span><br>Loading...</div>'
+        result = load_docs_to_chroma()
+        yield result
 
-    btn.click(fn=show_group_repos, outputs=output)
+    btn.click(fn=on_click, outputs=output)
  # --- Chat UI ---
     gr.Markdown(f"## Chat ({os.getenv('MODEL_NAME')})")
     chatbot = gr.Chatbot()

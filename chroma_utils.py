@@ -5,7 +5,7 @@ import markdown2
 from langchain_core.documents import Document
 from langchain_chroma import Chroma
 from langchain_ollama import OllamaEmbeddings
-import PyPDF2
+import pymupdf4llm
 import ollama
 from sentence_transformers import SentenceTransformer
 
@@ -43,15 +43,27 @@ def search_multi_collection(prompt: str):
         embeddings = SentenceTransformerEmbeddings(embedding_name)
         print(f"Searching in collection: {collection} with embedding: {embedding_name}")
         collection = Chroma(persist_directory=os.getenv("DB_NAME"), embedding_function=embeddings, collection_name=collection)
-        retrieved_docs = collection.similarity_search_with_score(prompt, k=5)
+        retrieved_docs = collection.similarity_search_with_score(prompt, k=20)
         # retrieved_docs = collection.max_marginal_relevance_search(
-        #     prompt, k=5, fetch_k=100, lambda_mult=0.2
+        #     prompt, k=25, fetch_k=100, lambda_mult=0.3
         # )  
 
+        t = ""
         for doc, score in retrieved_docs:
             print(f"Document metadata: {doc.metadata}, score: {score}")
-            if score < 500:
+            t += f"Document metadata: {doc.metadata}, score: {score}\n \n {doc.page_content}\n"
+            if score < 330:
                 all_docs.append(doc)
+
+        with open(f'sample.md', 'w', encoding="utf-8") as file:
+            file.write(t)
+
+    if len(all_docs) > 0: 
+        return all_docs
+    
+    sorted_docs = sorted(retrieved_docs, key=lambda x: x[1], reverse=False)[:5]
+    # Return only the document objects, not the scores
+    return [doc for doc, score in sorted_docs]
 
         # if collection == "technical":
         #     filtered_docs = [doc for doc, score in retrieved_docs if score < 500]
@@ -69,7 +81,7 @@ def search_multi_collection(prompt: str):
 
 
         # all_docs.extend(retrieved_docs)
-    return all_docs
+    
     # sorted_docs = sorted(all_docs, key=lambda x: x[1], reverse=False)
     # return [doc for doc, score in sorted_docs if score > 200]        
     
@@ -107,7 +119,15 @@ def summarize_text(system_prompt: str, user_prompt: str) -> str:
     print("Text summarized.")
     return response["message"]["content"]
 
-def load_files_to_chroma(directory: str, db_context_number: int):
+def load_files(directory: str):
+    for subfolder in os.listdir(directory):
+        subfolder_path = os.path.join(directory, subfolder)
+        if os.path.isdir(subfolder_path):
+            print(f"Processing subfolder: {subfolder}")
+            load_files_to_chroma(subfolder)
+
+
+def load_files_to_chroma(directory: str):
     if not os.path.exists("documents"):
         os.makedirs("documents", exist_ok=True)
     files_dir = os.path.join(os.path.dirname(__file__), 'documents', directory)
@@ -115,20 +135,36 @@ def load_files_to_chroma(directory: str, db_context_number: int):
         return "No repository documents directory found."
     
     for file in os.listdir(files_dir):
-        print(f"Processing file: {file}")
+        print(f"Processing filex: {file}")
         file_path = os.path.join(files_dir, file)
         file_name = os.path.splitext(os.path.basename(file_path))[0]
         if file.lower().endswith('.md'):
             header_splitter = MarkdownHeaderTextSplitter(headers_to_split_on=[("#", "Header 1"), ("##", "Header 2"), ("###", "Header 3")])
             all_docs = []
             text_splitter = RecursiveCharacterTextSplitter(chunk_size=2000, chunk_overlap=300)
+            print("11")
             with open(file_path, 'r', encoding='utf-8') as f:
                 content = f.read()
 
-                html = markdown2.markdown(content)
-                soup = BeautifulSoup(html, 'html.parser')
-                content_text = soup.get_text()
-                chunks = text_splitter.split_text(content_text)
+                # html = markdown2.markdown(content)
+                # soup = BeautifulSoup(html, 'html.parser')
+                # content_text = soup.get_text()
+                # content_text = content_text.replace('_', ' ').replace('-', ' ')
+                # chunks = text_splitter.split_text(content_text)
+                print("sss")
+                if (file.startswith("db-")):
+                    model = os.getenv("MODEL_NAME")
+                    summary = ollama.chat(
+                        model=model,
+                        messages=[
+                            {"role": "system", "content": "you are a database expert that summarizes the schema and table information"},
+                            {"role": "user", "content": f"Summarize the database schema and table information without loosing any table names, columns, relationships and other information from the following content: {content}"}
+                        ]
+                    )  
+                    content = summary["message"]["content"]                  
+                    print(f"Summary: {content}")
+
+                chunks = text_splitter.split_text(content)
                 for chunk in chunks:
                     metadata = {
                         "doc_type": "md",
@@ -143,31 +179,89 @@ def load_files_to_chroma(directory: str, db_context_number: int):
                 store_documents(directory, all_docs)
         if file.lower().endswith('.pdf'):
             text_splitter = RecursiveCharacterTextSplitter(chunk_size=2000, chunk_overlap=300)
+            header_splitter = MarkdownHeaderTextSplitter(headers_to_split_on=[("#", "Header 1"), ("##", "Header 2"), ("###", "Header 3") , ("####", "Header 4")])
+            pdf_content = pymupdf4llm.to_markdown(file_path)
 
-            with open(file_path, 'rb') as f:
-                reader = PyPDF2.PdfReader(f)
-                text = ""
-                for page in reader.pages:
-                    text += page.extract_text() or ""
-
-                all_docs = []
-                chunks = text_splitter.split_text(text)
-                if not chunks or len(chunks) == 0:
+            all_docs = []
+            chunks = text_splitter.split_text(pdf_content)
+            for chunk in chunks:
+                if not chunk:
                     continue
-                for chunk in chunks:
-                    text = chunk.strip()
-                    if not text:
-                        continue                
-                    metadata = {
-                        "doc_type": "pdf",
-                        "reference": file_path.lower(),
-                        "file_path": file_path.lower()
-                    }
-                    doc = Document(page_content=text, metadata=metadata)
-                    all_docs.append(doc)
-                    print(f"Extracted {len(text)} characters from {file_name}")
-                #load_docs_to_chroma(db_context_number, all_docs)
-                store_documents(directory, all_docs)
+                metadata = {
+                    "doc_type": "pdf",
+                    "reference": file_name.lower(),
+                    "file_path": file_name.lower()
+                }
+                doc = Document(page_content=chunk, metadata=metadata)
+                all_docs.append(doc)
+                print(f"Extracted {len(chunk)} characters from {file_name}")
+            store_documents(directory, all_docs)
+
+            # md_parts = header_splitter.split_text(pdf_content)
+            # print( f"Splitting PDF content into {len(md_parts)} chunks.")
+            # all_docs = []
+            # for part in md_parts:
+            #     content = ""
+            #     header = ""
+            #     if part.metadata.get('Header 1'):                    
+            #         header += part.metadata.get('Header 1')
+            #         content += part.metadata.get('Header 1') + "\n" 
+            #     if part.metadata.get('Header 2'):
+            #         header += part.metadata.get('Header 2')
+            #         content += part.metadata.get('Header 2') + "\n" 
+            #     if part.metadata.get('Header 3'):
+            #         header += part.metadata.get('Header 3')
+            #         content += part.metadata.get('Header 3') + "\n" 
+            #     if part.metadata.get('Header 4'):   
+            #         header += part.metadata.get('Header 4')
+            #         content += part.metadata.get('Header 4') + "\n"
+            #     if part.page_content:
+            #         html = markdown2.markdown(part.page_content)
+            #         soup = BeautifulSoup(html, 'html.parser')
+            #         content_text = soup.get_text()
+            #         content += content_text
+            #     print(f"======\n{content}\n======\n")
+            #     chunks = text_splitter.split_text(content)
+            #     for chunk in chunks:
+            #         text = chunk.strip().replace('_', ' ').replace('-', ' ')
+            #         if not text:
+            #             continue                
+            #         metadata = {
+            #             "doc_type": "pdf",
+            #             "reference": file_name.lower(),
+            #             "file_path": file_name.lower()
+            #         }
+            #         doc = Document(page_content=header.replace('_', ' ').replace('-', ' ') + "\n" + text, metadata=metadata)
+            #         all_docs.append(doc)
+            #         print(f"Extracted {len(text)} characters from {file_name}")
+
+            # store_documents(directory, all_docs)                
+
+            # with open(file_path, 'rb') as f:
+            #     reader = PyPDF2.PdfReader(f)
+
+            #     text = ""
+            #     for page in reader.pages:
+            #         text += page.extract_text() or ""
+
+            #     all_docs = []
+            #     chunks = text_splitter.split_text(text)
+            #     if not chunks or len(chunks) == 0:
+            #         continue
+            #     for chunk in chunks:
+            #         text = chunk.strip()
+            #         if not text:
+            #             continue                
+            #         metadata = {
+            #             "doc_type": "pdf",
+            #             "reference": file_path.lower(),
+            #             "file_path": file_path.lower()
+            #         }
+            #         doc = Document(page_content=text, metadata=metadata)
+            #         all_docs.append(doc)
+            #         print(f"Extracted {len(text)} characters from {file_name}")
+            #     #load_docs_to_chroma(db_context_number, all_docs)
+            #     store_documents(directory, all_docs)
 
     return f"Loaded files from {directory} into Chroma DB."
 

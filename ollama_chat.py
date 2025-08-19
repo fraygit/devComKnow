@@ -147,7 +147,7 @@ def chat_with_ollama_2(prompt: str, model: str = "llama3:8b", persist_directory:
         yield(f"{full_response}")
         context = "No relevant context found."
     else:
-        full_response += f"✅ Found {len(results)} relevant documents.\n"
+        full_response += f"✅ Found {len(results)} chunks of relevant information.\n"
         yield(f"{full_response}")
         # context = "\n---\n".join([f"Document {i+1}:\nMetadata: {doc.metadata}\nContent: {doc.page_content}" 
         #                        for i, doc in enumerate(results)])
@@ -155,18 +155,26 @@ def chat_with_ollama_2(prompt: str, model: str = "llama3:8b", persist_directory:
 
     try:
         # Step 1: Understand the context
-        system_prompt = ("You are an AI assistant that helps answer questions based on the provided context. "
+        system_prompt = ("You are an full stack developer that helps answer questions based on the provided technical documents and markdown files. "
                         "Think step by step and explain your reasoning.")
         
         # First, analyze the context
-        analysis_prompt = f"""Analyze the following context and identify key information that might be relevant 
-        to answering questions. Pay attention to:
-        1. Main topics and themes
-        2. Important facts or data points
-        3. Any relationships between different pieces of information
+        # analysis_prompt = f"""Analyze the following context and identify key information that might be relevant 
+        # to answering questions. Pay attention to:
+        # 1. Main topics and themes
+        # 2. Important facts or data points
+        # 3. Any relationships between different pieces of information
 
-        Context:
-        {context}
+        # Question:
+        # {prompt}
+        # \n\n
+        # Context:
+        # {context}
+        # """
+        analysis_prompt = f"""Analyze the following context and find key information that might be relevant 
+        to answering questions. Keep it short. \n\n
+        Question: {prompt}\n\n
+        Context: {context}\n\n
         """
 
         full_response += "🧠 Analyzing context...\n"
@@ -179,7 +187,7 @@ def chat_with_ollama_2(prompt: str, model: str = "llama3:8b", persist_directory:
             ],
             stream=True
         )
-        full_response += "Analysis:\n"
+        full_response += "Document retrieved and context analysis:\n"
         yield(f"{full_response}")
         analysis_response = ""
         for chunk in analysis:
@@ -189,37 +197,37 @@ def chat_with_ollama_2(prompt: str, model: str = "llama3:8b", persist_directory:
                 yield(f"{full_response}")
 
         # Step 2: Understand and refine the question
-        full_response += "🔍 Refining question...\n"
-        yield(f"{full_response}")
-        question_analysis = ollama.chat(
-            model=model,
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": analysis_response},
-                {"role": "assistant", "content": analysis_response},
-                {"role": "user", "content": f"""
-                Based on the context analysis, let's analyze the user's question to better understand what they're asking.
+        # full_response += "🔍 Refining question...\n"
+        # yield(f"{full_response}")
+        # question_analysis = ollama.chat(
+        #     model=model,
+        #     messages=[
+        #         {"role": "system", "content": system_prompt},
+        #         {"role": "user", "content": analysis_response},
+        #         {"role": "assistant", "content": analysis_response},
+        #         {"role": "user", "content": f"""
+        #         Based on the context analysis, let's analyze the user's question to better understand what they're asking.
                 
-                User's question: {prompt}
+        #         User's question: {prompt}
                 
-                Please:
-                1. Rephrase the question in your own words
-                2. Identify any ambiguities or missing information
-                3. Break down the question into sub-questions if needed
-                4. Determine what information from the context is most relevant
-                """}
-            ],
-            stream=True
-        )
+        #         Please:
+        #         1. Rephrase the question in your own words
+        #         2. Identify any ambiguities or missing information
+        #         3. Break down the question into sub-questions if needed
+        #         4. Determine what information from the context is most relevant
+        #         """}
+        #     ],
+        #     stream=True
+        # )
 
-        full_response += "Question Analysis:\n"
-        yield(f"{full_response}")
-        question_analysis_response = ""
-        for chunk in question_analysis:
-            if 'message' in chunk and 'content' in chunk['message']:
-                question_analysis_response += chunk['message']['content']
-                full_response += f"{chunk['message']['content']}"
-                yield(f"{full_response}")
+        # full_response += "Question Analysis:\n"
+        # yield(f"{full_response}")
+        # question_analysis_response = ""
+        # for chunk in question_analysis:
+        #     if 'message' in chunk and 'content' in chunk['message']:
+        #         question_analysis_response += chunk['message']['content']
+        #         full_response += f"{chunk['message']['content']}"
+        #         yield(f"{full_response}")
 
         # Step 3: Generate the final answer using chain of thought
         full_response += "🤖 Generating final answer...\n"
@@ -230,8 +238,8 @@ def chat_with_ollama_2(prompt: str, model: str = "llama3:8b", persist_directory:
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": analysis_response},
                 {"role": "assistant", "content": analysis_response},
-                {"role": "user", "content": question_analysis_response},
-                {"role": "assistant", "content": question_analysis_response},
+                # {"role": "user", "content": question_analysis_response},
+                # {"role": "assistant", "content": question_analysis_response},
                 {"role": "user", "content": f"""
                 Based on the context analysis and question breakdown, please provide a detailed answer to:
                 {prompt}
@@ -242,7 +250,8 @@ def chat_with_ollama_2(prompt: str, model: str = "llama3:8b", persist_directory:
                 3. The final answer
                 4. Sources from the context that support your answer
                 
-                If the answer cannot be determined from the context, please state that clearly.
+                If the answer cannot be determined from the context, please state that clearly, do not make up an answer.
+                Keep the response concise and focused on the question and keep it short.
 
                 Here is the detailed context again for reference:
                 {context}
